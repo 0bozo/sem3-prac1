@@ -1,359 +1,210 @@
-#include <iostream>
-#include <fstream>
-#include <cstring>
-#include <filesystem>
-#include <jsoncpp/json/json.h>
-
-using namespace std;
-namespace fs = std::filesystem;
-
-const int max_String_length = 100; // max dlina stroki
-
-// analog String 
-class String {
-private:
-    char* data;
-    size_t size;
-public:
-    String(const char* str = "") {
-        size = strlen(str);
-        data = new char[size + 1];
-        strcpy(data, str);
+#include <iostream> 
+#include <fstream> 
+#include <istream>
+#include <sstream> 
+#include <filesystem>  
+ 
+using namespace std; 
+namespace fs = std::filesystem; 
+ 
+// analog string 
+class String { 
+    char* data; 
+    size_t len; 
+ 
+public: 
+    String() : data(nullptr), len(0) {} 
+   
+    String(const char* str) { 
+        len = 0; 
+        while (str[len] != '\0') ++len; 
+        data = new char[len + 1]; 
+        for (size_t i = 0; i < len; ++i) data[i] = str[i]; 
+        data[len] = '\0'; 
     }
 
-    String(const String& other) {
-        size = other.size;
-        data = new char[size + 1];
-        strcpy(data, other.data);
-    }
+    ~String() { delete[] data; } 
+   
+    String(const String& other) { 
+        len = other.len; 
+        data = new char[len + 1]; 
+        for (size_t i = 0; i < len; ++i) data[i] = other.data[i]; 
+        data[len] = '\0'; 
+    } 
 
-    ~String() {
-        delete[] data;
-    }
-
-    String& operator=(const String& other) {
-        if (this == &other) return *this;
-        delete[] data;
-        size = other.size;
-        data = new char[size + 1];
-        strcpy(data, other.data);
-        return *this;
-    }
-
-    String& operator+(const String& other) {
-        size_t newSize = size + other.size;
-        char* newData = new char[newSize + 1];
-        strcpy(newData, data);
-        strcat(newData, other.data);
-        delete[] data;
-    data = newData;
-    size = newSize;
-    return *this;
-    }
-
-    char& operator[](size_t index) {
-        return data[index];
-    }
-
-    const char* c_str() const {
-        return data;
-    }
-
-    size_t length() const {
-        return size;
+    String& operator=(const String& other) { 
+        if (this != &other) { 
+            delete[] data; 
+            len = other.len; 
+            data = new char[len + 1]; 
+            for (size_t i = 0; i < len; ++i) data[i] = other.data[i]; 
+            data[len] = '\0'; 
+        } 
+        return *this; 
     }
 
     void clear() {
-        size = 0;
         delete[] data;
-        data = new char[1];
-        data[0] = '\0';
+        data = nullptr;
+        len = 0;
     }
-};
 
-//analog vectora
-template<typename T>
-class Vector {
-private:
-    T* data;
-    size_t capacity;
-    size_t size;
+    friend istream& operator>>(istream& is, String& str) {
+        str.clear();
+        char buffer[1024];
+        is >> buffer;
+        str = String(buffer);
+        return is;
+    }
 
-    void resize() {
-        capacity *= 2;
-        T* newData = new T[capacity];
-        for (size_t i = 0; i < size; ++i) {
-            newData[i] = data[i];
+    friend istream& getline(istream& is, String&str) {
+        str.clear();
+        char buffer[1024];
+        is.getline(buffer, sizeof(buffer));
+        if (is) {
+            str = String(buffer);
         }
-        delete[] data;
-        data = newData;
-    }
-public:
-    Vector() : size(0), capacity(2) {
-        data = new T[capacity];
+        return is;
     }
 
-    ~Vector() {
-        delete[] data;
+    bool operator==(const String& other) const { 
+        if (len != other.len) return false; 
+        for (size_t i = 0; i < len; ++i) { 
+            if (data[i] != other.data[i]) return false; 
+        } 
+        return true; 
     }
 
-    void push_back(const T& value) {
-        if (size == capacity) {
-            resize();
-        }
-        data[size++] = value;
-    }
+    const char* c_str() const { return data; }
 
-    T& operator[](size_t index) {
-        return data[index];
-    }
-
-    size_t length() const {
-        return size;
-    }
-
-    void clear() {
-        size = 0;
-    }
-};
-
-// xranenie kolonok tablici
-struct tabColumns {
-    String name;
-
-    tabColumns() : name("") {}
-
-    tabColumns(const char* colName) : name(colName) {}
-};
-
-// xranenie strok tablici
-struct tabRows {
-    Vector<String> values;
-    tabRows() {}
-    tabRows(const Vector<String>& vals) : values(vals) {}
-};
-
-//class tablici
-class table {
-public:
-    Vector<tabColumns> columns;
-    Vector<tabRows> rows;
-    String tableName;
-    int tuplesLimit;
-    int currentFileIndex = 1;
-    int primaryKey = 0;
-
-    table() : tableName(""), tuplesLimit(0), currentFileIndex(1) {}
-
-    table(const char* name, int limit) : tableName(name), tuplesLimit(limit) {}
-
-    void addColumn(const char* columnName) { 
-        columns.push_back(tabColumns(columnName));
-    }
-
-    //proverka, zablokirovana li tablica
-    bool isLocked() {
-        String lockFilePath = tableName + "_lock";
-        return fs::exists(lockFilePath.c_str());
-    }
-
-    // ystanovka bloka tablici
-    bool lockTable() {
-        if (isLocked()) {
-            cout << "Таблица " << tableName.c_str() << " уже заблокирована" << endl;
-            return false;
-        }
-
-        String lockFilePath = tableName + "_lock";
-        ofstream lockFile(lockFilePath.c_str());
-        lockFile.close();
-        return true;
-    }
-
-    // snyatie bloka
-    void unlockTable() {
-        String lockFilePath = tableName + "_lock";
-        fs::remove(lockFilePath.c_str());
-    }
-
-    void insertRow(const Vector<String>& rowValues) {
-        if (!lockTable()) {
-            return; // esli tablica v bloke - vstavka ne mojet bit' vipolnena
-        }
-
-        if (rowValues.length() != columns.length()) {
-            cout << "Ошибка: количество значений не соответствует колчисеству колонок" << endl;
-            unlockTable(); // pri owibke razblokiruem tablicy
-            return;
-        }
-        rows.push_back(tabRows(rowValues));
-        if (rows.length() >= tuplesLimit) {
-            saveToFile();
-            rows.clear(); //o4istka zapisei posle soxraneniya
-        }
-
-        unlockTable(); //posle yspewnoi vstavki razblokiruem
-    }
-
-    void saveToFile() {
-        String fileName = tableName;
-        fileName = fileName + "/" + to_string(currentFileIndex) + ".csv";
-        ofstream file(fileName.c_str(), ios::app);
-
-        if (!file) {
-            cout << "Ошибка при открытии файла " << fileName.c_str() << endl;
-            return;
-        }
-
-        //esli pustoi file - dobavlyaem zagolovki
-        if (file.tellp() == 0) {
-            for (size_t i = 0; i < columns.length(); ++i) {
-                file << columns[i].name.c_str();
-                if (i < columns.length() - 1) {
-                    file << ",";
-                }
-            }
-            file << endl;
-        }
-
-        for (size_t j = 0; j < rows.length(); ++j) {
-            for (size_t i = 0; i < rows[j].values.length(); ++i) {
-                file << rows[j].values[i].c_str();
-                if (i < rows[j].values.length() - 1) {
-                    file << ",";
-                }
-            }
-            file << endl;
-        }
-        file.close();
-
-        // esli dostigli limita strok - pereklyu4aem na next file
-        if (rows.length() >= tuplesLimit) {
-            currentFileIndex++;
-        }
-    }
-
-    void createDirectory() {
-        fs::create_directory(tableName.c_str());
-        ofstream keyFile(tableName.c_str() + String("/primary_key_sequence"), ios::app);
-        keyFile.close();
-    }
-
-    void loadPrimaryKey() {
-        String keyFilePath = tableName + "/primary_key_sequence";
-        ifstream keyFile(keyFilePath.c_str());
-        if (keyFile.is_open()) {
-            keyFile >> primaryKey;
-        }
-        keyFile.close();
-    }
-
-    void savePrimaryKey() {
-        String keyFilePath = tableName + "/primary_key_sequence";
-        ofstream keyFile(keyFilePath.c_str(), ios::trunc);
-        keyFile << primaryKey;
-        keyFile.close();
-    }
-
-    void displayTable() {
-        for (size_t i = 0; i < columns.length(); ++i) {
-            cout << columns[i].name.c_str() << "\t";
-        }
-        cout << endl;
-        for (size_t i = 0; i < rows.length(); ++i) {
-            for (size_t j = 0; j < rows[i].values.length(); ++j) {
-                cout << rows[i].values[j].c_str() << "\t";
-            }
-            cout << endl;
-        }
-    }
-};
-
-// 4tenie jsona
-void readSchemaFromJson(const char* filename, String& dbName, int& tuplesLimit, Vector<table>& tables) {
-    ifstream file(filename, ifstream::binary);
-    Json::Value root;
-    Json::CharReaderBuilder reader;
-    String errors;
-
-    if (!Json::parseFromStream(reader, file, &root, &errors)) {
-        cerr << "Ошибка чтения json: " << errors << endl;
-        return;
-    }
-
-    dbName = root["name"].asCString();
-    tuplesLimit = root["tuples_limit"].asInt();
-
-    const Json::Value structure = root["structure"];
-    for (const auto& tableName : structure.getMemberNames()) {
-        table tabl(table.c_str(), tuplesLimit);
-        for (const auto& column : structure[tableName]) {
-            tabl.addColumn(column.asCString());
-        }
-        tables.push_back(tabl);
-    }
-}
-
-// vipolnenie zaprosov kak v sql
-void executeSQL(table& tabl, const String& query) {
-    char buffer[max_String_length];
-    strcpy(buffer, query.c_str());
-    char* token = strtok(buffer, " ");
-
-    if (strcmp(token, "INSERT") == 0) {
-        strtok(nullptr, " "); // propusk "INTO"
-        char* tableName = strtok(nullptr, " ");
-        strtok(nullptr, " "); // propusk "VALUES"
-        char* valuesStr = strtok(nullptr, "\n");
-
-        Vector<String> values;
-        char* value = strtok(valuesStr, ",()");
-        while (value != nullptr) {
-            values.push_back(String(value));
-            value = strtok(nullptr, ",()");
-        }
-        tabl.insertRow(values);
-    } else if (strcmp(token, "DISPLAY") == 0) {
-        tabl.displayTable();
-    } else {
-        cout << "Неизвестная команда.." << endl;
-    }
-}
-
-int main() {
-    String dbName;
-    int tuplesLimit;
-    Vector<table> tables;
-
-    // 4itaem jsson
-    readSchemaFromJson("schema.json", dbName, tuplesLimit, tables);
-
-    // delaem directoriyu
-    fs::create_directory(dbName.c_str());
-    for (std::size_t i = 0; i < tables.length(); ++i) {
-        tables[i].createDirectory()
-    }
-
-    cout << "База данных " << dbName.c_str() << " создана" << endl;
-
-    char query[max_String_length];
-    while (true) {
-        cout << "SQL> ";
-        cin.getline(query, max_String_length);
-        if (strcmp(query, "exit") == 0) {
-            break;
-        }
-
-        // poka tol'ko pervaya tablica dlya primera
-        /if (tables.length() > 0) {
-            executeSQL(tables[0], String(query));
-        }
-    }
-
-    //soxranenie ostavwixsya strok v faili do zakritiya
-    for (size_t i = 0; i < tables.length(); ++i) {
-        tables[i].saveToFile();
-    }
-
-    return 0;
+}; 
+ 
+// analog vector 
+template <typename T> 
+class Vector { 
+    T* data; 
+    size_t capacity; 
+    size_t size; 
+ 
+    void resize(size_t new_capacity) { 
+        T* new_data = new T[new_capacity]; 
+        for (size_t i = 0; i < size; ++i) new_data[i] = data[i]; 
+        delete[] data; 
+        data = new_data; 
+        capacity = new_capacity; 
+    } 
+ 
+public: 
+    Vector() : data(nullptr), capacity(0), size(0) {} 
+    ~Vector() { delete[] data; } 
+    void push_back(const T& value) { 
+        if (size == capacity) resize(capacity == 0 ? 1 : capacity * 2); 
+        data[size++] = value; 
+    } 
+    T& operator[](size_t index) { return data[index]; } 
+    size_t get_size() const { return size; } 
+}; 
+ 
+// bolee prostoi map 
+template <typename K, typename V> 
+class Map { 
+    struct Pair { 
+        K key; 
+        V value; 
+    }; 
+ 
+    Vector<Pair> data; 
+ 
+public: 
+    void insert(const K& key, const V& value) { 
+        for (size_t i = 0; i < data.get_size(); ++i) { 
+            if (data[i].key == key) { 
+                data[i].value = value; 
+                return; 
+            } 
+        } 
+        data.push_back({key, value}); 
+    } 
+    V* find(const K& key) { 
+        for (size_t i = 0; i < data.get_size(); ++i) { 
+            if (data[i].key == key) return &data[i].value; 
+        } 
+        return nullptr; 
+    } 
+    Vector<Pair>& get_data() { return data; } 
+}; 
+ 
+// cfg schemi 
+struct SchemaConfig { 
+    String name; 
+    int tuples_limit; 
+    Map<String, Vector<String>> tables; 
+}; 
+ 
+// load schemi 
+SchemaConfig loadSchema(const char* filename) { 
+    ifstream file(filename); 
+    if (!file.is_open()) { 
+        cerr << "Ошибка: не удалось открыть " << filename << endl; 
+        exit(1); 
+    } 
+ 
+    SchemaConfig schema; 
+    schema.tuples_limit = 1000; // Установка лимита строк по умолчанию 
+    schema.name = "Схема"; 
+ 
+    String line; 
+    while (getline(file, line.c_str())) { 
+        Vector<String> columns; 
+        istringstream iss(line.c_str()); 
+        String tableName; 
+        iss >> tableName; 
+ 
+        String column; 
+        while (iss >> column) columns.push_back(column); 
+ 
+        schema.tables.insert(tableName, columns); 
+    } 
+    return schema; 
+} 
+ 
+// structura directorii 
+void createDirectories(const SchemaConfig& schema) { 
+    fs::create_directory(schema.name.c_str()); 
+    for (auto& pair : schema.tables.get_data()) { 
+        String table = pair.key; 
+        String tablePath = schema.name.c_str() + String("/") + table; 
+        fs::create_directory(tablePath.c_str()); 
+ 
+        ofstream pkFile((tablePath.c_str() + String("/pk_sequence")).c_str()); 
+        pkFile << 1; 
+        pkFile.close(); 
+ 
+        ofstream lockFile((tablePath.c_str() + String("/lock")).c_str()); 
+        lockFile << "UNLOCKED"; 
+        lockFile.close(); 
+ 
+        ofstream csvFile((tablePath.c_str() + String("/1.csv")).c_str()); 
+        csvFile.close(); 
+    } 
+} 
+ 
+// Основной цикл обработки команд 
+void processCommand(const String& command, const SchemaConfig& schema) { 
+    cout << "Команда: " << command.c_str() << " (обработка не реализована)." << endl; 
+} 
+ 
+int main() { 
+    // Загрузка схемы 
+    SchemaConfig schema = loadSchema("schema.json"); 
+    createDirectories(schema); 
+ 
+    // Цикл обработки команд 
+    String command; 
+    cout << "Введите SQL-запрос или 'EXIT' для выхода:\n"; 
+    while (getline(cin, command.c_str())) { 
+        if (command == "EXIT") break; 
+        processCommand(command, schema); 
+    } 
+    return 0; 
 }
