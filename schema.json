@@ -1,0 +1,8 @@
+{
+    "name": "Схема_1",
+    "tuples_limit": 100,
+    "structure": {
+        "users": ["ID", "Name", "Age"],
+        "orders": ["OrderID", "Living Area"]
+    }
+} 
