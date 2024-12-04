@@ -6,11 +6,13 @@
  
 using namespace std; 
 namespace fs = std::filesystem; 
- 
+	
 // analog string 
 class String { 
     char* data; 
     size_t len; 
+	friend istream& operator>>(istream& is, String& str);
+	friend istream& getline(istream& is, String&str);
  
 public: 
     String() : data(nullptr), len(0) {} 
@@ -42,29 +44,28 @@ public:
         } 
         return *this; 
     }
+	
+	friend String operator +(const String& str1, const String str2) {
+	    char* new_data = new char[str1.len + str2.len + 1];
+	    for (size_t i = 0; i < str1.len; ++i) {
+	        new_data[i] = str1.data[i];
+	    }
+	    
+	    for (size_t i = 0; i < str2.len; ++i) {
+	        new_data[str1.len+i] = str2.data[i];
+	    }
+	    
+	    new_data[str1.len + str2.len] = '\0';
+	    String result(new_data);
+	    delete[] new_data;
+	    
+	    return result;
+	}
 
     void clear() {
         delete[] data;
         data = nullptr;
         len = 0;
-    }
-
-    friend istream& operator>>(istream& is, String& str) {
-        str.clear();
-        char buffer[1024];
-        is >> buffer;
-        str = String(buffer);
-        return is;
-    }
-
-    friend istream& getline(istream& is, String&str) {
-        str.clear();
-        char buffer[1024];
-        is.getline(buffer, sizeof(buffer));
-        if (is) {
-            str = String(buffer);
-        }
-        return is;
     }
 
     bool operator==(const String& other) const { 
@@ -78,6 +79,24 @@ public:
     const char* c_str() const { return data; }
 
 }; 
+
+istream& operator>>(istream& is, String& str) {
+    str.clear();
+    char buffer[1024];
+	is >> buffer;
+	str = String(buffer);
+	return is;
+}
+
+istream& getline(istream& is, String& str) {
+	str.clear();
+	char buffer[1024];
+	is.getline(buffer, sizeof(buffer));
+	if (is) {
+		str = String(buffer);
+	}
+	return is;
+}
  
 // analog vector 
 template <typename T> 
@@ -154,7 +173,7 @@ SchemaConfig loadSchema(const char* filename) {
     schema.name = "Схема"; 
  
     String line; 
-    while (getline(file, line.c_str())) { 
+    while (getline(file, line)) { 
         Vector<String> columns; 
         istringstream iss(line.c_str()); 
         String tableName; 
@@ -173,18 +192,18 @@ void createDirectories(const SchemaConfig& schema) {
     fs::create_directory(schema.name.c_str()); 
     for (auto& pair : schema.tables.get_data()) { 
         String table = pair.key; 
-        String tablePath = schema.name.c_str() + String("/") + table; 
-        fs::create_directory(tablePath.c_str()); 
+        String tablePath = schema.name + String("/") + table; 
+        fs::create_directory(tablePath; 
  
-        ofstream pkFile((tablePath.c_str() + String("/pk_sequence")).c_str()); 
+        ofstream pkFile((tablePath + String("/pk_sequence")).c_str()); 
         pkFile << 1; 
         pkFile.close(); 
  
-        ofstream lockFile((tablePath.c_str() + String("/lock")).c_str()); 
+        ofstream lockFile((tablePath+ String("/lock")).c_str()); 
         lockFile << "UNLOCKED"; 
         lockFile.close(); 
  
-        ofstream csvFile((tablePath.c_str() + String("/1.csv")).c_str()); 
+        ofstream csvFile((tablePath + String("/1.csv")).c_str()); 
         csvFile.close(); 
     } 
 } 
@@ -202,7 +221,7 @@ int main() {
     // Цикл обработки команд 
     String command; 
     cout << "Введите SQL-запрос или 'EXIT' для выхода:\n"; 
-    while (getline(cin, command.c_str())) { 
+    while (getline(cin, command)) { 
         if (command == "EXIT") break; 
         processCommand(command, schema); 
     } 
