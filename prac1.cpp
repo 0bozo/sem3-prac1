@@ -122,6 +122,9 @@ public:
     } 
     T& operator[](size_t index) { return data[index]; } 
     size_t get_size() const { return size; } 
+    
+    const T* begin() const { return data; }
+    const T* end() const { return data + size; }
 }; 
  
 // bolee prostoi map 
@@ -150,7 +153,7 @@ public:
         } 
         return nullptr; 
     } 
-    Vector<Pair>& get_data() { return data; } 
+    const Vector<Pair>& get_data() const { return data; } 
 }; 
  
 // cfg schemi 
@@ -193,7 +196,7 @@ void createDirectories(const SchemaConfig& schema) {
     for (auto& pair : schema.tables.get_data()) { 
         String table = pair.key; 
         String tablePath = schema.name + String("/") + table; 
-        fs::create_directory(tablePath; 
+        fs::create_directory(tablePath); 
  
         ofstream pkFile((tablePath + String("/pk_sequence")).c_str()); 
         pkFile << 1; 
