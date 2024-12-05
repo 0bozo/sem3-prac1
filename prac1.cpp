@@ -43,6 +43,23 @@ public:
         }
         return *this;
     }
+    
+    friend String operator +(const String& str1, const String str2) {
+	    char* new_data = new char[str1.len + str2.len + 1];
+	    for (size_t i = 0; i < str1.len; ++i) {
+	        new_data[i] = str1.data[i];
+	    }
+	    
+	    for (size_t i = 0; i < str2.len; ++i) {
+	        new_data[str1.len+i] = str2.data[i];
+	    }
+	    
+	    new_data[str1.len + str2.len] = '\0';
+	    String result(new_data);
+	    delete[] new_data;
+	    
+	    return result;
+	}
 
     void clear() {
         delete[] data;
@@ -62,6 +79,25 @@ public:
 
     size_t length() const { return len; }
 };
+
+istream& operator>>(istream& is, String& str) {
+    str.clear();
+    char buffer[1024];
+	is >> buffer;
+	str = String(buffer);
+	return is;
+}
+
+istream& getline(istream& is, String& str) {
+	str.clear();
+	char buffer[1024];
+	is.getline(buffer, sizeof(buffer));
+	if (is) {
+		str = String(buffer);
+	}
+	return is;
+}
+
 
 // Преобразование String в std::filesystem::path
 fs::path to_path(const String& str) {
@@ -166,17 +202,17 @@ SchemaConfig loadSchema(const char* filename) {
 
 // structura directorii
 void createDirectories(const SchemaConfig& schema) {
-    // Создание основной директории схемы
+    // sozdaem osnovnyyu dir schemi
     fs::create_directory(to_path(schema.name));
 
     for (auto& pair : schema.tables.get_data()) {
         String table = pair.key;
         String tablePath = schema.name + String("/") + table;
 
-        // Создание директории для каждой таблицы
+        // sozdanie dir dlya kajdoi tablici
         fs::create_directory(to_path(tablePath));
 
-        // Создание файлов для таблицы
+        // sozdanie failov dlya tablici
         ofstream pkFile((tablePath + String("/pk_sequence")).c_str());
         pkFile << 1;
         pkFile.close();
