@@ -196,7 +196,7 @@ void createDirectories(const SchemaConfig& schema) {
     for (auto& pair : schema.tables.get_data()) { 
         String table = pair.key; 
         String tablePath = schema.name + String("/") + table; 
-        fs::create_directory(tablePath); 
+        fs::create_directory(filesystem::path(tablePath.c_str())); 
  
         ofstream pkFile((tablePath + String("/pk_sequence")).c_str()); 
         pkFile << 1; 
